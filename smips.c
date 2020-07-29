@@ -1,9 +1,3 @@
-/* To-do
-1) Memory management - must FREE all mallocs/callocs
-2) Allocate & initialise only 1 spelling+pointer for each function type
-3) Deprecate get_program_length
-4) Divide program into multiple files */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -89,6 +83,7 @@ program_t decode_program(FILE *file_ptr);
 void print_program(program_t mips_program);
 void execute_program(int32_t *reg, program_t mips_program);
 void print_reg_changes(int32_t *reg);
+void free_program(program_t mips_program);
 
 int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
 int32_t sub(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
@@ -119,6 +114,7 @@ int main (int argc, char *argv[]) {
     execute_program(reg, my_program);
     printf("Registers After Execution\n");
     print_reg_changes(reg);
+    free_program(my_program);
     return 0;
 }
 
@@ -346,6 +342,20 @@ void print_reg_changes(int32_t *reg) {
             printf("$%-2d = %d\n", i, reg[i]);
         }
     }
+}
+
+void free_program(program_t mips_program) {
+    for (uint32_t i = 0; i < mips_program->n_lines; i++) {
+        instr_t curr_instr = mips_program->code[i];
+        /* Will be deprecated upon using string literals instead */
+        free(curr_instr->name);
+        /* Free data attached to instruction */
+        free(curr_instr);
+    }
+    /* Free (array of) pointers to instructions */
+    free(mips_program->code);
+    /* Free pointer to above & length of mips_program */
+    free(mips_program);
 }
 
 int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
