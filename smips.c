@@ -191,7 +191,6 @@ bool_t is_hex_val(char c) {
 
 instr_t decode_instruction(uint32_t num) {
     instr_t curr_instruct = malloc (sizeof(struct instruction));
-    curr_instruct->name = malloc(8 * sizeof(char));
     // Default Values
     curr_instruct->arg_1 = 0;
     curr_instruct->arg_2 = 0;
@@ -199,7 +198,7 @@ instr_t decode_instruction(uint32_t num) {
     curr_instruct->type = TYPE_SYS;
     /* Syscall */
     if (num == ENC_SYSCALL) {
-        strcpy(curr_instruct->name, "syscall");
+        curr_instruct->name = "syscall";
         curr_instruct->action = &syscall;
         return curr_instruct;
     }
@@ -215,39 +214,39 @@ instr_t decode_instruction(uint32_t num) {
             break;
 
         case ENC_BEQ:
-            strcpy(curr_instruct->name, "beq");
+            curr_instruct->name = "beq";
             curr_instruct->action = &beq;
             curr_instruct->type = TYPE_L2;
             return curr_instruct;
 
         case ENC_BNE:
-            strcpy(curr_instruct->name, "bne");
+            curr_instruct->name = "bne";
             curr_instruct->action = &bne;
             curr_instruct->type = TYPE_L2;
             return curr_instruct;
 
         case ENC_ADDI:
-            strcpy(curr_instruct->name, "addi");
+            curr_instruct->name = "addi";
             curr_instruct->action = &addi;
             return curr_instruct;
 
         case ENC_SLTI:
-            strcpy(curr_instruct->name, "slti");
+            curr_instruct->name = "slti";
             curr_instruct->action = &slti;
             return curr_instruct;
 
         case ENC_ANDI:
-            strcpy(curr_instruct->name, "andi");
+            curr_instruct->name = "andi";
             curr_instruct->action = &andi;
             return curr_instruct;
 
         case ENC_ORI:
-            strcpy(curr_instruct->name, "ori");
+            curr_instruct->name = "ori";
             curr_instruct->action = &ori;
             return curr_instruct;
 
         case ENC_LUI:
-            strcpy(curr_instruct->name, "lui");
+            curr_instruct->name = "lui";
             curr_instruct->action = &lui;
             curr_instruct->type = TYPE_L3;
             return curr_instruct;
@@ -261,32 +260,32 @@ instr_t decode_instruction(uint32_t num) {
     curr_instruct->type = TYPE_R;
     switch (num_masked) {
         case ENC_ADD:
-            strcpy(curr_instruct->name, "add");
+            curr_instruct->name = "add";
             curr_instruct->action = &add;
             return curr_instruct;
         
         case ENC_SUB:
-            strcpy(curr_instruct->name, "sub");
+            curr_instruct->name = "sub";
             curr_instruct->action = &sub;
             return curr_instruct;
 
         case ENC_AND:
-            strcpy(curr_instruct->name, "and");
+            curr_instruct->name = "and";
             curr_instruct->action = &and;
             return curr_instruct;
         
         case ENC_OR:
-            strcpy(curr_instruct->name, "or");
+            curr_instruct->name = "or";
             curr_instruct->action = &or;
             return curr_instruct;
 
         case ENC_SLT:
-            strcpy(curr_instruct->name, "slt");
+            curr_instruct->name = "slt";
             curr_instruct->action = &slt;
             return curr_instruct;
 
         case ENC_MUL:
-            strcpy(curr_instruct->name, "mul");
+            curr_instruct->name = "mul";
             curr_instruct->action = &mul;
             return curr_instruct;
 
@@ -347,8 +346,6 @@ void print_reg_changes(int32_t *reg) {
 void free_program(program_t mips_program) {
     for (uint32_t i = 0; i < mips_program->n_lines; i++) {
         instr_t curr_instr = mips_program->code[i];
-        /* Will be deprecated upon using string literals instead */
-        free(curr_instr->name);
         /* Free data attached to instruction */
         free(curr_instr);
     }
