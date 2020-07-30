@@ -11,7 +11,7 @@
 #define BMASK_REG_D  0xf800     // 00000000000000001111100000000000
 #define BMASK_LTERAL 0xffff     // 00000000000000001111111111111111
 #define BMASK_SUBFLD 0x7ff      // 00000000000000000000011111111111
-#define BMASK_REGFLD 0x3fff800  // 00000011111111111111100000000000
+
 /* Encodings */
 /* Types with zero instruction field */
 #define ENC_ADD 0x20 // 00000100000
@@ -127,11 +127,11 @@ program_t decode_program(FILE *file_ptr) {
     mips_program->code = calloc(mips_program->n_lines, sizeof(instr_t));
     int index = 0;
     fgets(str_buf, 8 + 2, file_ptr);
-    /* do {...} while (fgets(str_buf, 8 + 1, file_ptr) != NULL); */
+    /* while (fgets(str_buf, 8 + 1, file_ptr) != NULL) */
     do {
-        /* New line should be read from file then removed. Otherwise it is read
-           on its own line*/
-        str_buf[strcspn(str_buf, "\n")] = 0;
+        /* '\n' is intentionally read in from file so that it doesn't set a 
+           premature break */
+        //str_buf[strcspn(str_buf, "\n")] = 0;
         uint32_t num = (uint32_t)strtol(str_buf, (char **)0 , 16);
         /* Perform operations with num */
         mips_program->code[index] = decode_instruction(num);
@@ -211,9 +211,12 @@ instr_t decode_instruction(uint32_t num) {
     switch (num_masked) {
         /* R-type instructions (exc. MUL) have zero instruction field */
         case 0x0:
+            
             break;
 
         case ENC_BEQ:
+            /* By using string literals there will be no duplication of strings
+               in memory for duplicate instructions */
             curr_instruct->name = "beq";
             curr_instruct->action = &beq;
             curr_instruct->type = TYPE_L2;
