@@ -31,14 +31,15 @@
 #define ENC_SYSCALL 0xc     // 00000000000000000000000000001100
 
 #define INSTRUCTION_EXIT 0
-#define INVALID_INSTR -1
+#define INVALID_INSTR_ENC -1
 #define REG_SIZE    26
 
-#define TYPE_SYS    0x0 // syscall
-#define TYPE_R      0x1 // <instr> $d, $s, $t
-#define TYPE_L1     0x2 // <instr> $t, $s, I
-#define TYPE_L2     0x3 // <instr> $s, $t, I
-#define TYPE_L3     0x4 //   lui   $t, I
+#define TYPE_ERR    0x0 // N/A : unknown instruction code
+#define TYPE_SYS    0x1 // syscall
+#define TYPE_R      0x2 // <instr> $d, $s, $t
+#define TYPE_L1     0x3 // <instr> $t, $s, I
+#define TYPE_L2     0x4 // <instr> $s, $t, I
+#define TYPE_L3     0x5 //   lui   $t, I
 
 /* int32 Register Aliases */
 #define V0          2
@@ -52,38 +53,39 @@
 /* Using 'bool' as an alias to convey intention */
 typedef uint8_t bool_t;
 
-/* Decoded instructions will take on a more advanced structure:  */
-/* ## 1: Each instruction (i.e. line in program) will have associated a name
-   (for printing), three arguments, and a function pointer (for execution) */
-/* ## 1a: Function pointer will take pointer to `register' (an array), 
-   three instruction "arguments", and return 1 or some PC offset. */
+/* Instructions will be decoded into the following format: 
+   - arguments : registers/immediates
+   - "name" - for printing
+   - "type" - format for printing
+   - action - for execution */
 typedef int32_t (*perform)(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-struct instruction {
+
+typedef struct instruction {
     char *name;
-    bool_t type;
+    uint8_t type;
     /* 1,2: 5-bit registers */
-    uint8_t arg_1;
-    uint8_t arg_2;
+    uint8_t arg_S;
+    uint8_t arg_T;
     /*   3: 5-bit register or 16-bit immediate */
     uint16_t arg_3;
-    /* */
+    /* Points to action of instruction*/
     perform action;
-};
-typedef struct instruction *instr_t;
-struct program {
+} instr_t;
+
+typedef struct program {
     uint32_t n_lines;
-    instr_t *code;
-};
-typedef struct program *program_t;
+    /* Array of pointers to instructions (of non-constant length) */
+    instr_t **code;
+} program_t;
 
 int get_program_length(FILE *file_pointer);
 bool_t is_hex_val(char c);
-instr_t decode_instruction(uint32_t num);
-program_t decode_program(FILE *file_ptr);
-void print_program(program_t mips_program);
-void execute_program(int32_t *reg, program_t mips_program);
+instr_t *decode_instruction(uint32_t num);
+program_t *decode_program(FILE *file_ptr, char *file_path);
+void print_program(program_t *mips_program);
+void execute_program(int32_t *reg, program_t *mips_program);
 void print_reg_changes(int32_t *reg);
-void free_program(program_t mips_program);
+void free_program(program_t *mips_program);
 
 int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
 int32_t sub(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
@@ -107,7 +109,7 @@ int main (int argc, char *argv[]) {
     int32_t reg[REG_SIZE] = {0};
     //int len = get_program_length(file_pointer);
     //printf("%d", len);
-    program_t my_program = decode_program(file_pointer);
+    program_t *my_program = decode_program(file_pointer, in_file_path);
     printf("Program\n");
     print_program(my_program);
     printf("Output\n");
@@ -118,23 +120,36 @@ int main (int argc, char *argv[]) {
     return 0;
 }
 
-program_t decode_program(FILE *file_ptr) {
+/*  Iterates through line-separated ASCII file containing MIPS32 instructions,
+    encoded as hexadecimal. Decodes every instruction and converts into an array
+    of "instruction" structs. 
+    `file_path' only used for printing errors when unknown instruction 
+    encountered. */
+program_t *decode_program(FILE *file_ptr, char *file_path) {
     char str_buf[8 + 2] = {0};
-    /* Using get_program_length to check program char-by-char and reliably determine
-       if input is valid. */
-    program_t mips_program = malloc(sizeof(struct program));
+    /* Using get_program_length to check program char-by-char reliably
+       determine if input is valid. */
+    program_t *mips_program = malloc(sizeof(struct program));
     mips_program->n_lines = get_program_length(file_ptr);
-    mips_program->code = calloc(mips_program->n_lines, sizeof(instr_t));
-    int index = 0;
+    mips_program->code = calloc(mips_program->n_lines, sizeof(instr_t*));
+    uint32_t index = 0;
     fgets(str_buf, 8 + 2, file_ptr);
-    /* while (fgets(str_buf, 8 + 1, file_ptr) != NULL) */
+    /* A while loop would fail to decode a single-instruction file */
     do {
-        /* '\n' is intentionally read in from file so that it doesn't set a 
-           premature break */
-        //str_buf[strcspn(str_buf, "\n")] = 0;
+        /*  Intentionally reading in '\n' char from file; else it would trigger
+            another exit from fgets */
         uint32_t num = (uint32_t)strtol(str_buf, (char **)0 , 16);
-        /* Perform operations with num */
+        
+        /* Convert num to (pointer to malloc'd) "instruction" struct */
         mips_program->code[index] = decode_instruction(num);
+        
+        /* If decoded instruction does not match */
+        if (mips_program->code[index]->type == TYPE_ERR) {
+            uint8_t instr_code = (num & BMASK_INSTR) >> 26;
+            printf("%s:%d invalid instruction code: %d", file_path, index, instr_code);
+            exit(0);
+        }
+
         index++;
     } while (fgets(str_buf, 8 + 2, file_ptr) != NULL);
     return mips_program;
@@ -161,7 +176,7 @@ int get_program_length(FILE *file_pointer) {
         /* Return a negative value (error) is a non-hex and non-newline char is 
            encountered */
         if ( !is_hex_val(curr_char) && curr_char != '\n' ) {
-            return INVALID_INSTR;
+            return INVALID_INSTR_ENC;
         }
         curr_char = (char)fgetc(file_pointer);
     }
@@ -189,34 +204,39 @@ bool_t is_hex_val(char c) {
     return 0;
 }
 
-instr_t decode_instruction(uint32_t num) {
-    instr_t curr_instruct = malloc (sizeof(struct instruction));
-    // Default Values
-    curr_instruct->arg_1 = 0;
-    curr_instruct->arg_2 = 0;
-    curr_instruct->arg_3 = 0;
-    curr_instruct->type = TYPE_SYS;
-    /* Syscall */
+/*  Takes a MIPS32 instruction and converts it into a struct containing:
+    - up to 3 params/args, with at most one 16-bit signed immediate,
+    - the instruction's assembly language layout as a macro constant,
+    - the instruction's action as a pointer to a function, and
+    - the instruction name as a pointer to a string literal 
+    TYPE_ERR is stored in `type' field and returned if instruction doesn't match
+    with any in defined subset. */
+instr_t *decode_instruction(uint32_t num) {
+    instr_t *curr_instruct = malloc (sizeof(struct instruction));
+
+    curr_instruct->arg_S = (num & BMASK_REG_S) >> 21;
+    curr_instruct->arg_T = (num & BMASK_REG_T) >> 16;
+
+    /* Case A: Syscall */
     if (num == ENC_SYSCALL) {
         curr_instruct->name = "syscall";
         curr_instruct->action = &syscall;
+        curr_instruct->type = TYPE_SYS;
+        curr_instruct->arg_3 = 0;
         return curr_instruct;
-    }
-    curr_instruct->type = TYPE_L1;
-    curr_instruct->arg_1 = (num & BMASK_REG_S) >> 21;
-    curr_instruct->arg_2 = (num & BMASK_REG_T) >> 16;
+    }    
+    /* Case B: I-type instructions */
     uint32_t num_masked = num & BMASK_INSTR;
-    /* I-type instructions */
+    curr_instruct->type = TYPE_L1;
     curr_instruct->arg_3 = num & BMASK_LTERAL;
     switch (num_masked) {
         /* R-type instructions (exc. MUL) have zero instruction field */
-        case 0x0:
-            
+        case 0x0:    
             break;
 
         case ENC_BEQ:
             /* By using string literals there will be no duplication of strings
-               in memory for duplicate instructions */
+               in memory for repeat instructions of same type. */
             curr_instruct->name = "beq";
             curr_instruct->action = &beq;
             curr_instruct->type = TYPE_L2;
@@ -257,7 +277,8 @@ instr_t decode_instruction(uint32_t num) {
         default:
             break;
     }
-    /* R-type instructions */
+    /* Case C: R-type instructions */
+    /* We need to adjust our mask to read the subfield. */
     num_masked = num & (BMASK_INSTR  | BMASK_SUBFLD);
     curr_instruct->arg_3 = (num & BMASK_REG_D) >> 11;
     curr_instruct->type = TYPE_R;
@@ -293,40 +314,52 @@ instr_t decode_instruction(uint32_t num) {
             return curr_instruct;
 
         default:
-            assert(0);
+            /*  If reached, it means we've found no matching instruction
+                encodings after checking both instruction field and subfield */
+            curr_instruct->type = TYPE_ERR;
             break;
     }
     return curr_instruct;
 }
 
-void print_program(program_t mips_program) {
+void print_program(program_t *mips_program) {
     uint32_t n_lines = mips_program->n_lines;
     for (uint32_t i = 0; i < n_lines; i++) {
-        instr_t curr = mips_program->code[i];
-        if (curr->type == TYPE_SYS) {
-            printf("%3d: %s\n", i, curr->name);
-        } else if (curr->type == TYPE_R) {
-            printf("%3d: %-4s $%d, $%d, $%d\n", i, curr->name, curr->arg_3,
-                   curr->arg_1, curr->arg_2);
-        } else if (curr->type == TYPE_L1) {
-            printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_2, 
-                   curr->arg_1, (int16_t)curr->arg_3);
-        } else if (curr->type == TYPE_L2) {
-            printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_1, 
-                   curr->arg_2, (int16_t)curr->arg_3);
-        } else if (curr->type == TYPE_L3) {
-            printf("%3d: %-4s $%d, %d\n", i, curr->name, curr->arg_2, 
+        instr_t *curr = mips_program->code[i];
+        switch (curr->type) {
+            /* Instruction subset prints in five different formats */
+            case TYPE_SYS:
+                printf("%3d: %s\n", i, curr->name);
+                break;
+            case TYPE_R:
+                printf("%3d: %-4s $%d, $%d, $%d\n", i, curr->name, curr->arg_3,
+                       curr->arg_S, curr->arg_T);
+                break;
+            case TYPE_L1:
+                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_T, 
+                       curr->arg_S, (int16_t)curr->arg_3);
+                break;
+            case TYPE_L2:
+                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_S, 
+                       curr->arg_T, (int16_t)curr->arg_3);
+                break;
+            case TYPE_L3:
+                printf("%3d: %-4s $%d, %d\n", i, curr->name, curr->arg_T, 
                    (int16_t)curr->arg_3);
+                break;
+            default:
+                assert(0);
+                break;
         }
     }
     return;
 }
 
-void execute_program(int32_t *reg, program_t mips_program) {
+void execute_program(int32_t *reg, program_t *mips_program) {
     uint32_t i = 0;
     while (i < mips_program->n_lines) {
-        instr_t curr = mips_program->code[i];
-        int32_t pc_offs = curr->action( reg, curr->arg_1, curr->arg_2, 
+        instr_t *curr = mips_program->code[i];
+        int32_t pc_offs = curr->action( reg, curr->arg_S, curr->arg_T, 
                                         curr->arg_3 );
         if (pc_offs == INSTRUCTION_EXIT) {
             return;
@@ -346,9 +379,9 @@ void print_reg_changes(int32_t *reg) {
     }
 }
 
-void free_program(program_t mips_program) {
+void free_program(program_t *mips_program) {
     for (uint32_t i = 0; i < mips_program->n_lines; i++) {
-        instr_t curr_instr = mips_program->code[i];
+        instr_t *curr_instr = mips_program->code[i];
         /* Free data attached to instruction */
         free(curr_instr);
     }
@@ -356,6 +389,7 @@ void free_program(program_t mips_program) {
     free(mips_program->code);
     /* Free pointer to above & length of mips_program */
     free(mips_program);
+    return;
 }
 
 int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
