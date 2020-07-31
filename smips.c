@@ -57,20 +57,23 @@ typedef uint8_t bool_t;
    - arguments : registers/immediates
    - "name" - for printing
    - "type" - format for printing
-   - action - for execution */
-typedef int32_t (*perform)(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
+   - action - for execution 
+*/
+typedef struct instruction instr_t;
+typedef int32_t (*perform)(int32_t *reg, instr_t *curr);
 
-typedef struct instruction {
+struct instruction {
     char *name;
     uint8_t type;
     /* 1,2: 5-bit registers */
-    uint8_t arg_S;
-    uint8_t arg_T;
+    uint8_t reg_S;
+    uint8_t reg_T;
     /*   3: 5-bit register or 16-bit immediate */
     uint16_t arg_3;
     /* Points to action of instruction*/
+    //int32_t (*action)(int32_t *reg, instr_t *self);
     perform action;
-} instr_t;
+};
 
 typedef struct program {
     uint32_t n_lines;
@@ -87,20 +90,20 @@ void execute_program(int32_t *reg, program_t *mips_program);
 void print_reg_changes(int32_t *reg);
 void free_program(program_t *mips_program);
 
-int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t sub(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t and(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t or(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t slt(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t mul(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t beq(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t bne(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t addi(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t slti(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t andi(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t ori(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t lui(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
-int32_t syscall(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3);
+int32_t add(int32_t *reg, instr_t *curr);
+int32_t sub(int32_t *reg, instr_t *curr);
+int32_t and(int32_t *reg, instr_t *curr);
+int32_t or(int32_t *reg, instr_t *curr);
+int32_t slt(int32_t *reg, instr_t *curr);
+int32_t mul(int32_t *reg, instr_t *curr);
+int32_t beq(int32_t *reg, instr_t *curr);
+int32_t bne(int32_t *reg, instr_t *curr);
+int32_t addi(int32_t *reg, instr_t *curr);
+int32_t slti(int32_t *reg, instr_t *curr);
+int32_t andi(int32_t *reg, instr_t *curr);
+int32_t ori(int32_t *reg, instr_t *curr);
+int32_t lui(int32_t *reg, instr_t *curr);
+int32_t syscall(int32_t *reg, instr_t *curr);
 
 
 int main (int argc, char *argv[]) {
@@ -146,7 +149,8 @@ program_t *decode_program(FILE *file_ptr, char *file_path) {
         /* If decoded instruction does not match */
         if (mips_program->code[index]->type == TYPE_ERR) {
             uint8_t instr_code = (num & BMASK_INSTR) >> 26;
-            printf("%s:%d invalid instruction code: %d", file_path, index, instr_code);
+            printf( "%s:%d invalid instruction code: %d", file_path, index, 
+                    instr_code );
             exit(0);
         }
 
@@ -214,8 +218,8 @@ bool_t is_hex_val(char c) {
 instr_t *decode_instruction(uint32_t num) {
     instr_t *curr_instruct = malloc (sizeof(struct instruction));
 
-    curr_instruct->arg_S = (num & BMASK_REG_S) >> 21;
-    curr_instruct->arg_T = (num & BMASK_REG_T) >> 16;
+    curr_instruct->reg_S = (num & BMASK_REG_S) >> 21;
+    curr_instruct->reg_T = (num & BMASK_REG_T) >> 16;
 
     /* Case A: Syscall */
     if (num == ENC_SYSCALL) {
@@ -333,18 +337,18 @@ void print_program(program_t *mips_program) {
                 break;
             case TYPE_R:
                 printf("%3d: %-4s $%d, $%d, $%d\n", i, curr->name, curr->arg_3,
-                       curr->arg_S, curr->arg_T);
+                       curr->reg_S, curr->reg_T);
                 break;
             case TYPE_L1:
-                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_T, 
-                       curr->arg_S, (int16_t)curr->arg_3);
+                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->reg_T, 
+                       curr->reg_S, (int16_t)curr->arg_3);
                 break;
             case TYPE_L2:
-                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->arg_S, 
-                       curr->arg_T, (int16_t)curr->arg_3);
+                printf("%3d: %-4s $%d, $%d, %d\n", i, curr->name, curr->reg_S, 
+                       curr->reg_T, (int16_t)curr->arg_3);
                 break;
             case TYPE_L3:
-                printf("%3d: %-4s $%d, %d\n", i, curr->name, curr->arg_T, 
+                printf("%3d: %-4s $%d, %d\n", i, curr->name, curr->reg_T, 
                    (int16_t)curr->arg_3);
                 break;
             default:
@@ -359,8 +363,7 @@ void execute_program(int32_t *reg, program_t *mips_program) {
     uint32_t i = 0;
     while (i < mips_program->n_lines) {
         instr_t *curr = mips_program->code[i];
-        int32_t pc_offs = curr->action( reg, curr->arg_S, curr->arg_T, 
-                                        curr->arg_3 );
+        int32_t pc_offs = curr->action(reg, curr);
         if (pc_offs == INSTRUCTION_EXIT) {
             return;
         }
@@ -377,6 +380,7 @@ void print_reg_changes(int32_t *reg) {
             printf("$%-2d = %d\n", i, reg[i]);
         }
     }
+    return;
 }
 
 void free_program(program_t *mips_program) {
@@ -392,59 +396,61 @@ void free_program(program_t *mips_program) {
     return;
 }
 
-int32_t add(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = reg[a1] + reg[a2];
+int32_t add(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = reg[curr->reg_S] + reg[curr->reg_T];
     return 1;
 }
-int32_t sub(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = reg[a1] - reg[a2];
+int32_t sub(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = reg[curr->reg_S] - reg[curr->reg_T];
     return 1;
 }
-int32_t and(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = reg[a1] & reg[a2];
+int32_t and(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = reg[curr->reg_S] & reg[curr->reg_T];
     return 1;
 }
-int32_t or(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = reg[a1] | reg[a2];
+int32_t or(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = reg[curr->reg_S] | reg[curr->reg_T];
     return 1;
 }
-int32_t slt(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = (reg[a1] < reg[a2]);
+int32_t slt(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = (reg[curr->reg_S] < reg[curr->reg_T]);
     return 1;
 }
-int32_t mul(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a3] = reg[a1] * reg[a2];
+int32_t mul(int32_t *reg, instr_t *curr) {
+    reg[curr->arg_3] = reg[curr->reg_S] * reg[curr->reg_T];
     return 1;
 }
-int32_t beq(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
+int32_t beq(int32_t *reg, instr_t *curr) {
     /* if (reg[a1] == reg[a2]) {return (int16_t)a3} else {return 1} */
-    return 1 + ( (int16_t)a3 - 1 ) * ( reg[a1] == reg[a2] );
+    uint is_eq  = reg[curr->reg_S] == reg[curr->reg_T];
+    return  1 + (is_eq)*((int16_t)curr->arg_3 - 1 );
 }
-int32_t bne(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
+int32_t bne(int32_t *reg, instr_t *curr) {
     /* if (reg[a1] != reg[a2]) {return (int16_t)a3} else {return 1} */
-    return 1 + ( (int16_t)a3 - 1 ) * ( reg[a1] != reg[a2] );
+    uint8_t is_neq = reg[curr->reg_S] != reg[curr->reg_T];
+    return  1 + (is_neq)*((int16_t)curr->arg_3 - 1 );
 }
-int32_t addi(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a2] = reg[a1] + (int16_t)a3;
+int32_t addi(int32_t *reg, instr_t *curr) {
+    reg[curr->reg_T] = reg[curr->reg_S] + (int16_t)curr->arg_3;
     return 1;
 }
-int32_t slti(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a2] = reg[a1] << a3;
+int32_t slti(int32_t *reg, instr_t *curr) {
+    reg[curr->reg_T] = reg[curr->reg_S] << curr->arg_3;
     return 1;
 }
-int32_t andi(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a2] = reg[a1] & a3;
+int32_t andi(int32_t *reg, instr_t *curr) {
+    reg[curr->reg_T] = reg[curr->reg_S] & curr->arg_3;
     return 1;
 }
-int32_t ori(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a2] = reg[a1] | a3;
+int32_t ori(int32_t *reg, instr_t *curr) {
+    reg[curr->reg_T] = reg[curr->reg_S] | curr->arg_3;
     return 1;
 }
-int32_t lui(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
-    reg[a2] = a3 << 16;
+int32_t lui(int32_t *reg, instr_t *curr) {
+    reg[curr->reg_T] = curr->arg_3 << 16;
     return 1;
 }
-int32_t syscall(int32_t *reg, uint8_t a1, uint8_t a2, uint16_t a3) {
+int32_t syscall(int32_t *reg, instr_t *curr) {
     switch (reg[V0]) {
         case PRINT_INT:
             printf("%d", reg[A0]);
