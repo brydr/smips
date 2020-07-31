@@ -1,133 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 #include <assert.h>
+#include "smips.h"
+#include "instructions.h"
 
-/* Bitmasks for various fields, converted to hex */
-#define BMASK_INSTR  0xfc000000 // 11111100000000000000000000000000
-#define BMASK_REG_S  0x3e00000  // 00000011111000000000000000000000
-#define BMASK_REG_T  0x1f0000   // 00000000000111110000000000000000
-#define BMASK_REG_D  0xf800     // 00000000000000001111100000000000
-#define BMASK_LTERAL 0xffff     // 00000000000000001111111111111111
-#define BMASK_SUBFLD 0x7ff      // 00000000000000000000011111111111
-
-/* Encodings */
-/* Types with zero instruction field */
-#define ENC_ADD 0x20 // 00000100000
-#define ENC_SUB 0x22 // 00000100010
-#define ENC_AND 0x24 // 00000100100
-#define ENC_OR  0x25 // 00000100101
-#define ENC_SLT 0x2a // 00000000010
-/* Types with non-zero instruction fields */
-#define ENC_MUL  0x70000002 // 01110000000000000000000000000010
-#define ENC_BEQ  0x10000000 // 00010000000000000000000000000000
-#define ENC_BNE  0x14000000 // 00010100000000000000000000000000
-#define ENC_ADDI 0x20000000 // 00100000000000000000000000000000
-#define ENC_SLTI 0x28000000 // 00101000000000000000000000000000
-#define ENC_ANDI 0x30000000 // 00110000000000000000000000000000
-#define ENC_ORI  0x34000000 // 00110100000000000000000000000000
-#define ENC_LUI  0x3C000000 // 00111100000000000000000000000000
-#define ENC_SYSCALL 0xc     // 00000000000000000000000000001100
-
-#define INSTRUCTION_EXIT 0
-#define INVALID_INSTR_ENC -1
-#define REG_SIZE    26
-
-#define TYPE_ERR    0x0 // N/A : unknown instruction code
-#define TYPE_SYS    0x1 // syscall
-#define TYPE_R      0x2 // <instr> $d, $s, $t
-#define TYPE_L1     0x3 // <instr> $t, $s, I
-#define TYPE_L2     0x4 // <instr> $s, $t, I
-#define TYPE_L3     0x5 //   lui   $t, I
-
-/* int32 Register Aliases */
-#define V0          2
-#define A0          4
-
-/* Syscall Modes */
-#define PRINT_INT   1 
-#define EXIT_H      10
-#define PRINT_CHAR  11
-
-/* Using 'bool' as an alias to convey intention */
-typedef uint8_t bool_t;
-
-/* Instructions will be decoded into the following format: 
-   - arguments : registers/immediates
-   - "name" - for printing
-   - "type" - format for printing
-   - action - for execution 
-*/
-typedef struct instruction instr_t;
-typedef int32_t (*perform)(int32_t *reg, instr_t *curr);
-
-struct instruction {
-    char *name;
-    uint8_t type;
-    /* 1,2: 5-bit registers */
-    uint8_t reg_S;
-    uint8_t reg_T;
-    /*   3: 5-bit register or 16-bit immediate */
-    uint16_t arg_3;
-    /* Points to action of instruction*/
-    //int32_t (*action)(int32_t *reg, instr_t *self);
-    perform action;
-};
-
-typedef struct program {
-    uint32_t n_lines;
-    /* Array of pointers to instructions (of non-constant length) */
-    instr_t **code;
-} program_t;
-
-int get_program_length(FILE *file_pointer);
-bool_t is_hex_val(char c);
-instr_t *decode_instruction(uint32_t num);
-program_t *decode_program(FILE *file_ptr, char *file_path);
-void print_program(program_t *mips_program);
-void execute_program(int32_t *reg, program_t *mips_program);
-void print_reg_changes(int32_t *reg);
-void free_program(program_t *mips_program);
-
-int32_t add(int32_t *reg, instr_t *curr);
-int32_t sub(int32_t *reg, instr_t *curr);
-int32_t and(int32_t *reg, instr_t *curr);
-int32_t or(int32_t *reg, instr_t *curr);
-int32_t slt(int32_t *reg, instr_t *curr);
-int32_t mul(int32_t *reg, instr_t *curr);
-int32_t beq(int32_t *reg, instr_t *curr);
-int32_t bne(int32_t *reg, instr_t *curr);
-int32_t addi(int32_t *reg, instr_t *curr);
-int32_t slti(int32_t *reg, instr_t *curr);
-int32_t andi(int32_t *reg, instr_t *curr);
-int32_t ori(int32_t *reg, instr_t *curr);
-int32_t lui(int32_t *reg, instr_t *curr);
-int32_t syscall(int32_t *reg, instr_t *curr);
-
-
-int main (int argc, char *argv[]) {
-    char *in_file_path = argv[1];
-    FILE *file_pointer = fopen(in_file_path, "r");
-    int32_t reg[REG_SIZE] = {0};
-    //int len = get_program_length(file_pointer);
-    //printf("%d", len);
-    program_t *my_program = decode_program(file_pointer, in_file_path);
-    printf("Program\n");
-    print_program(my_program);
-    printf("Output\n");
-    execute_program(reg, my_program);
-    printf("Registers After Execution\n");
-    print_reg_changes(reg);
-    free_program(my_program);
-    return 0;
-}
-
-/*  Iterates through line-separated ASCII file containing MIPS32 instructions,
-    encoded as hexadecimal. Decodes every instruction and converts into an array
-    of "instruction" structs. 
-    `file_path' only used for printing errors when unknown instruction 
-    encountered. */
 program_t *decode_program(FILE *file_ptr, char *file_path) {
     char str_buf[8 + 2] = {0};
     /* Using get_program_length to check program char-by-char reliably
@@ -159,7 +35,6 @@ program_t *decode_program(FILE *file_ptr, char *file_path) {
     return mips_program;
 }
 
-/* Preparses program to determine if all instructions are valid*/
 int get_program_length(FILE *file_pointer) {
     int length = 0;
     bool_t curr_line_has_valid = 0;
@@ -194,7 +69,6 @@ int get_program_length(FILE *file_pointer) {
     return length;
 }
 
-/* Simple function for checking if c is any 0..9 or a..f or A..F */
 bool_t is_hex_val(char c) {
     if (c >= '0' && c <= '9') {
         return 1;
@@ -208,13 +82,6 @@ bool_t is_hex_val(char c) {
     return 0;
 }
 
-/*  Takes a MIPS32 instruction and converts it into a struct containing:
-    - up to 3 params/args, with at most one 16-bit signed immediate,
-    - the instruction's assembly language layout as a macro constant,
-    - the instruction's action as a pointer to a function, and
-    - the instruction name as a pointer to a string literal 
-    TYPE_ERR is stored in `type' field and returned if instruction doesn't match
-    with any in defined subset. */
 instr_t *decode_instruction(uint32_t num) {
     instr_t *curr_instruct = malloc (sizeof(struct instruction));
 
@@ -394,78 +261,4 @@ void free_program(program_t *mips_program) {
     /* Free pointer to above & length of mips_program */
     free(mips_program);
     return;
-}
-
-int32_t add(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = reg[curr->reg_S] + reg[curr->reg_T];
-    return 1;
-}
-int32_t sub(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = reg[curr->reg_S] - reg[curr->reg_T];
-    return 1;
-}
-int32_t and(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = reg[curr->reg_S] & reg[curr->reg_T];
-    return 1;
-}
-int32_t or(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = reg[curr->reg_S] | reg[curr->reg_T];
-    return 1;
-}
-int32_t slt(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = (reg[curr->reg_S] < reg[curr->reg_T]);
-    return 1;
-}
-int32_t mul(int32_t *reg, instr_t *curr) {
-    reg[curr->arg_3] = reg[curr->reg_S] * reg[curr->reg_T];
-    return 1;
-}
-int32_t beq(int32_t *reg, instr_t *curr) {
-    /* if (reg[a1] == reg[a2]) {return (int16_t)a3} else {return 1} */
-    uint is_eq  = reg[curr->reg_S] == reg[curr->reg_T];
-    return  1 + (is_eq)*((int16_t)curr->arg_3 - 1 );
-}
-int32_t bne(int32_t *reg, instr_t *curr) {
-    /* if (reg[a1] != reg[a2]) {return (int16_t)a3} else {return 1} */
-    uint8_t is_neq = reg[curr->reg_S] != reg[curr->reg_T];
-    return  1 + (is_neq)*((int16_t)curr->arg_3 - 1 );
-}
-int32_t addi(int32_t *reg, instr_t *curr) {
-    reg[curr->reg_T] = reg[curr->reg_S] + (int16_t)curr->arg_3;
-    return 1;
-}
-int32_t slti(int32_t *reg, instr_t *curr) {
-    reg[curr->reg_T] = reg[curr->reg_S] << curr->arg_3;
-    return 1;
-}
-int32_t andi(int32_t *reg, instr_t *curr) {
-    reg[curr->reg_T] = reg[curr->reg_S] & curr->arg_3;
-    return 1;
-}
-int32_t ori(int32_t *reg, instr_t *curr) {
-    reg[curr->reg_T] = reg[curr->reg_S] | curr->arg_3;
-    return 1;
-}
-int32_t lui(int32_t *reg, instr_t *curr) {
-    reg[curr->reg_T] = curr->arg_3 << 16;
-    return 1;
-}
-int32_t syscall(int32_t *reg, instr_t *curr) {
-    switch (reg[V0]) {
-        case PRINT_INT:
-            printf("%d", reg[A0]);
-            break;
-
-        case EXIT_H:
-            return INSTRUCTION_EXIT;
-
-        case PRINT_CHAR:
-            putchar(reg[A0]);
-            break;
-
-        default:
-            printf("Unknown system call: %d\n", reg[V0]);
-            return INSTRUCTION_EXIT;
-        }
-    return 1;
 }
