@@ -40,6 +40,7 @@
 #define ENC_ANDI    0x30000000 // 00110000000000000000000000000000
 #define ENC_ORI     0x34000000 // 00110100000000000000000000000000
 #define ENC_LUI     0x3C000000 // 00111100000000000000000000000000
+
 #define ENC_SYSCALL 0xc        // 00000000000000000000000000001100
 
 /* ----- IMPLEMENTATION CONSTANTS ----- */
@@ -50,7 +51,6 @@
 
 /* ----- RETURN CONSTANTS ----- */
 #define INSTRUCTION_EXIT    0
-#define INVALID_INSTR_ENC   -1
 
 /* ----- FORMAT ID CONSTANTS  ----- */
 #define TYPE_ERR    0x0 // N/A : unknown instruction code
@@ -59,9 +59,6 @@
 #define TYPE_L1     0x3 // <instr> $t, $s, I
 #define TYPE_L2     0x4 // <instr> $s, $t, I
 #define TYPE_L3     0x5 //   lui   $t, I
-
-/* ----- ALIASES ----- */
-//typedef uint8_t bool_t;
 
 /* ----- LOCAL STRUCTS ----- */
 
@@ -91,8 +88,8 @@ struct instruction {
 //
 typedef struct program {
     uint32_t n_lines;
-    // Array of instr_t pointers
-    instr_t **code;
+    // Array of instr_t
+    instr_t *code;
 } program_t;
 
 /* ----- FUNCTION PROTOTYPES ----- */
@@ -101,7 +98,7 @@ typedef struct program {
 
 int get_program_length(FILE *file_pointer);
 uint8_t is_valid_char(char c);
-instr_t *decode_instruction(uint32_t num);
+instr_t decode_instruction(uint32_t num);
 program_t *decode_program(FILE *file_ptr, char *file_path);
 
 void print_program(program_t *mips_program);

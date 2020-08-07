@@ -25,7 +25,7 @@
 // Functions modify values of reg[D] (R-type) or reg[T] (I-type) or neither,
 // based on some operation between reg[S] and reg[T] (R-type), or 
 // between reg[S] and a literal/constant.
-// The register indicies and literals are stored within `curr', the referenced
+// The register indicies and literals are stored within `curr', the addressed
 // instruction struct.
 // The desired increment to the 'program counter' is returned, which in all 
 // cases (except branching instructions) is equal to 1.

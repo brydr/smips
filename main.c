@@ -11,17 +11,28 @@
 // * Primarily works through converting encoded instructions into an array of 
 //   structs which store all relevant characteristics for printing/performing.
 
+#include <stdlib.h>
 #include "smips.h"
 
 int main (int argc, char *argv[]) {
     char *in_file_path = argv[1];
     FILE *file_pointer = fopen(in_file_path, "r");
+
+    // fopen returns NULL upon failure
+    if (!file_pointer) {
+        perror("Error");
+        return EXIT_FAILURE;
+    }
+
     // Use an array to emulate register indicies
     int32_t reg[REG_SIZE] = {0};
 
     // Decode program into `instr_t' structs, and pass file name just in case an
     // invalid instruction is encountered.
     program_t *my_program = decode_program(file_pointer, in_file_path);
+
+    // We can close the file after loading instructions to heap
+    fclose(file_pointer);
 
     // Print out text assembly for MIPS program
     printf("Program\n");
@@ -37,5 +48,5 @@ int main (int argc, char *argv[]) {
 
     // Free memory allocation
     free_program(my_program);
-    return 0;
+    return EXIT_SUCCESS;
 }
