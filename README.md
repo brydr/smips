@@ -1,6 +1,20 @@
-### COMP1521 20T2: ass2: smips ###
+# A very simple emulator for a subset of the MIPS32 instruction set.
 
-Do not push changes to this repository directly.
-Do not change the repository via the web interface.
+Can be built on Linux with gcc toolchain using
+`gcc main.c smips.c instructions.c -o smips`
 
-Submit your work using usage: give class assignment [files...], and it will be automatically pushed to this repository.
+Emulated instructions:
+* ADD
+* SUB
+* AND
+* OR
+* SLT
+* MUL
+* BEQ
+* BNE
+* ADDI
+* SLTI
+* ANDI
+* ORI
+* LUI
+* SYSCALL
